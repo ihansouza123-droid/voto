@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Votação</title>
+    <!-- Ícone da Aba do Navegador (Favicon - Máquina Fotográfica) -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2306b6d4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/%3E%3Ccircle cx='12' cy='13' r='3'/%3E%3C/svg%3E" type="image/svg+xml">
     <!-- Carregar Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Configuração do Tailwind para animações personalizadas -->
@@ -73,7 +75,9 @@
             successMsg: false,
             isEditing: false,
             currentForm: { id: null, name: '' },
-            showResetConfirm: false
+            showResetConfirm: false,
+            isAdminAuthenticated: false,
+            adminLoginError: false
         };
 
         // Inicialização
@@ -81,6 +85,9 @@
             try {
                 const saved = window.localStorage.getItem('voting_system_data');
                 state.candidates = saved ? JSON.parse(saved) : DEFAULT_CANDIDATES;
+                
+                const authSaved = window.localStorage.getItem('voting_admin_auth');
+                state.isAdminAuthenticated = authSaved === 'true';
             } catch (e) {
                 console.error("Erro ao carregar dados", e);
                 state.candidates = DEFAULT_CANDIDATES;
@@ -90,6 +97,10 @@
             window.addEventListener('storage', (e) => {
                 if (e.key === 'voting_system_data') {
                     state.candidates = JSON.parse(e.newValue);
+                    render();
+                }
+                if (e.key === 'voting_admin_auth') {
+                    state.isAdminAuthenticated = e.newValue === 'true';
                     render();
                 }
             });
@@ -114,6 +125,7 @@
             state.successMsg = false;
             state.isEditing = false;
             state.showResetConfirm = false;
+            state.adminLoginError = false;
             render();
         }
 
@@ -297,6 +309,29 @@
         }
 
         // --- MÓDULO 3: GESTÃO ---
+        function handleAdminLogin(event) {
+            event.preventDefault();
+            const form = event.target;
+            const username = form.username.value;
+            const password = form.password.value;
+
+            if (username === 'carlos' && password === '1020') {
+                state.isAdminAuthenticated = true;
+                state.adminLoginError = false;
+                window.localStorage.setItem('voting_admin_auth', 'true');
+                render();
+            } else {
+                state.adminLoginError = true;
+                render();
+            }
+        }
+
+        function handleAdminLogout() {
+            state.isAdminAuthenticated = false;
+            window.localStorage.removeItem('voting_admin_auth');
+            render();
+        }
+
         function adminSetEditForm(id = null, name = '') {
             state.currentForm = { id, name };
             state.isEditing = true;
@@ -335,6 +370,41 @@
         }
 
         function getAdminHTML() {
+            // Verificar Autenticação
+            if (!state.isAdminAuthenticated) {
+                return `
+                    <div class="max-w-md mx-auto fade-in mt-10">
+                        <div class="bg-slate-900 p-8 rounded-2xl shadow-lg border border-slate-800 relative">
+                            <div class="text-center mb-6">
+                                <h2 class="text-2xl font-bold text-white tracking-tight">Acesso Restrito</h2>
+                                <p class="text-sm text-slate-400 mt-1">Faça login para gerir o sistema</p>
+                            </div>
+                            ${state.adminLoginError ? '<div class="bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-lg text-sm text-center mb-6">Credenciais inválidas. Tente novamente.</div>' : ''}
+                            <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Usuário</label>
+                                    <input type="text" name="username" required
+                                        class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all"
+                                        placeholder="Digite o usuário">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-1.5">Senha</label>
+                                    <input type="password" name="password" required
+                                        class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all"
+                                        placeholder="Digite a senha">
+                                </div>
+                                <div class="pt-2">
+                                    <button type="submit" class="w-full px-8 py-3 bg-cyan-500 text-slate-950 rounded-xl font-bold hover:bg-cyan-400 transition-colors">
+                                        Entrar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Interface de Gestão (Autorizada)
             let html = `
                 <div class="max-w-4xl mx-auto fade-in">
                     <div class="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -342,10 +412,15 @@
                             <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Gestão</h1>
                             <p class="mt-1 sm:mt-2 text-sm sm:text-base text-slate-400">Adicione, edite ou remova candidatos.</p>
                         </div>
-                        <button onclick="adminSetEditForm()" class="w-full sm:w-auto justify-center inline-flex items-center px-4 py-3 sm:py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl sm:rounded-lg hover:from-cyan-400 hover:to-blue-500 font-semibold transition-all shadow-[0_0_15px_rgba(34,211,238,0.15)]">
-                            <div class="w-5 h-5 mr-2">${icons.plus}</div>
-                            Novo Candidato
-                        </button>
+                        <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                            <button onclick="adminSetEditForm()" class="w-full sm:w-auto justify-center inline-flex items-center px-4 py-3 sm:py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl sm:rounded-lg hover:from-cyan-400 hover:to-blue-500 font-semibold transition-all shadow-[0_0_15px_rgba(34,211,238,0.15)]">
+                                <div class="w-5 h-5 mr-2">${icons.plus}</div>
+                                Novo Candidato
+                            </button>
+                            <button onclick="handleAdminLogout()" class="w-full sm:w-auto justify-center inline-flex items-center px-4 py-3 sm:py-2.5 bg-slate-800 text-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-700 font-medium transition-colors">
+                                Sair
+                            </button>
+                        </div>
                     </div>
             `;
 
